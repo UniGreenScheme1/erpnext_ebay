@@ -8,11 +8,14 @@ requires-python = ">=3.13"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    "iso3166",
-    "ebaysdk",
+    "bleach",
     "ebay_rest",
+    "ebaysdk",
     "ecdsa",
-    "redo"
+    "iso3166",
+    "redo",
+    "requests",
+    "werkzeug"
 ]
 
 [build-system]
@@ -24,5 +27,5 @@ frappe = ">=15.0.0,<16.0.0"
 erpnext = ">=15.0.0,<16.0.0"
 
 [project.urls]
-Repository = "https://github.com/bglazier/erpnext_ebay.git"
-"Bug Reports" = "https://github.com/bglazier/erpnext_ebay/issues"
+Repository = "https://github.com/UniGreenScheme1/erpnext_ebay.git"
+"Bug Reports" = "https://github.com/UniGreenScheme1/erpnext_ebay/issues"
