@@ -301,7 +301,8 @@ def sync_orders(num_days=None, sandbox=False, debug_print=MSGPRINT_DEBUG,
 
                 # Create Sales Invoice refund
                 create_return_sales_invoice(
-                    order_details, order, changes, debug_print
+                    order_details, order, trans_by_order, changes,
+                    debug_print
                 )
 
             except ErpnextEbaySyncError as e:
@@ -1355,7 +1356,8 @@ def create_sales_invoice(order_dict, order, listing_site, purchase_site,
     return
 
 
-def create_return_sales_invoice(order_dict, order, changes, print_func=None):
+def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
+                                print_func=None):
     """
     If the order has been refunded, Create a Sales Invoice return from
     the eBay order.
@@ -1372,19 +1374,40 @@ def create_return_sales_invoice(order_dict, order, changes, print_func=None):
     customer = order_dict['customer']
     customer_name = order_dict['customer_name']
     cancelled_names = []
+    ebay_paid_refund = False
 
     # If eBay refunds eBay-collected tax (e.g. VAT) you can end up
     # PARTIALLY_REFUNDED but with no refund information
     if not order['payment_summary']['refunds']:
-        if order['order_payment_status'] == 'FULLY_REFUNDED':
+        if order['order_payment_status'] != 'FULLY_REFUNDED':
+            frappe.throw(
+                f'Order {ebay_order_id} is partially refunded, but has '
+                + 'no refund information - is this an eBay-paid tax refund?',
+                exc=ErpnextEbaySyncError
+            )
+        # A FULLY_REFUNDED order with no refund information and no
+        # refund or dispute transactions was refunded by eBay itself
+        refund_transactions = [
+            t for t in trans_by_order.get(ebay_order_id, [])
+            if t['transaction_type'] in ('REFUND', 'DISPUTE')
+        ]
+        if refund_transactions:
             frappe.throw(f'Order {ebay_order_id} missing refund info?',
                          exc=ErpnextEbaySyncError)
         debug_msgprint(
-            f'Order {ebay_order_id} is partially refunded, but has '
-            + 'no refund information - is this an eBay-paid tax refund?',
+            f'Order {ebay_order_id} is fully refunded, but has no refund '
+            + 'information or transactions - refund paid by eBay',
             print_func
         )
-        return
+        ebay_paid_refund = True
+        # Single placeholder refund for the zero-value return
+        order['payment_summary']['refunds'] = [{
+            'refund_id': 'EBAY-PAID-REFUND',
+            'refund_reference_id': None,
+            'refund_status': 'REFUNDED',
+            'refund_date': order['last_modified_date'],
+            'amount': None
+        }]
 
     # Find the existing Sales Invoice, and its latest amendment.
     sinv_fields = db_get_ebay_doc(
@@ -1521,7 +1544,8 @@ def create_return_sales_invoice(order_dict, order, changes, print_func=None):
         # Loop over each refund
         posting_date = datetime.datetime.strptime(
             refund['refund_date'][:-1] + 'UTC', '%Y-%m-%dT%H:%M:%S.%f%Z')
-        if refund['amount']['currency'] != default_currency:
+        if (not ebay_paid_refund
+                and refund['amount']['currency'] != default_currency):
             raise ValueError('Unexpected base refund currency!')
 
         # Create a return Sales Invoice for the relevant quantities and amount.
@@ -1538,7 +1562,20 @@ def create_return_sales_invoice(order_dict, order, changes, print_func=None):
         if return_doc.payments[0].mode_of_payment != ebay_payment_account:
             raise ValueError('Wrong mode of payment!')
 
-        if (order_payment_status == 'FULLY_REFUNDED') and (n_refunds == 1):
+        if ebay_paid_refund:
+            # Refund paid by eBay; keep the returned items but at zero value
+            refund_type_str = 'Full'
+            base_refund_total = 0.0
+            for item in return_doc.items:
+                item.rate = 0.0
+                item.price_list_rate = 0.0
+                item.discount_percentage = 0.0
+                item.discount_amount = 0.0
+            for tax in return_doc.taxes:
+                if tax.charge_type == 'Actual':
+                    tax.tax_amount = 0.0
+            return_doc.payments[0].amount = 0.0
+        elif (order_payment_status == 'FULLY_REFUNDED') and (n_refunds == 1):
             # Fully refunded; just use total from refund SINV
             refund_type_str = 'Full'
             base_refund_total = return_doc.base_grand_total
@@ -1711,7 +1748,10 @@ def create_return_sales_invoice(order_dict, order, changes, print_func=None):
         for item in return_doc.items:
             item.margin_type = None
 
-        return_doc.title = f"""eBay {refund_type_str} Refund: {customer_name}"""
+        refund_label = (
+            'Refund (eBay paid refund)' if ebay_paid_refund else 'Refund')
+        return_doc.title = (
+            f"""eBay {refund_type_str} {refund_label}: {customer_name}""")
         return_doc.run_method('erpnext_ebay_before_insert')
         old_conversion_rate = sinv_doc.conversion_rate
         exc_changed = old_conversion_rate != return_doc.conversion_rate
@@ -1759,11 +1799,17 @@ def create_return_sales_invoice(order_dict, order, changes, print_func=None):
                 refund_currency_html = frappe.utils.escape_html(
                     f' ({cur_str})')
 
+            if ebay_paid_refund:
+                refund_paid_html = """<p>This refund was paid by eBay;
+                    no refund has been taken from the seller.</p>"""
+            else:
+                refund_paid_html = ''
             wc_doc.complaint = f"""
-                <p>eBay {refund_type_str} Refund</p>
+                <p>eBay {refund_type_str} {refund_label}</p>
                 <p>SINV <a href="{sinv_url}">{sinv_name_html}</a>;
                     Return SINV <a href="{ret_url}">{ret_name_html}</a></p>
                 <p>Refund amount: {refund_html}{refund_currency_html}</p>
+                {refund_paid_html}
                 <p>This Warranty Claim has been auto-generated in response
                 to a refund on eBay.</p>"""
             wc_doc.insert()
