@@ -1770,7 +1770,7 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                 old_conversion_rate, update_modified=False)
 
         return_doc.run_method('erpnext_ebay_after_insert')
-        #return_doc.submit()
+        # return_doc.submit()
 
         if CREATE_WARRANTY_CLAIMS:
             # Create a Warranty Claim for the refund, if one does not exist.
@@ -1814,16 +1814,16 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                 to a refund on eBay.</p>"""
             wc_doc.insert()
 
-            debug_msgprint(
-                f'Adding return Sales Invoice:'
-                + f'{ebay_user_id} : {return_doc.name}',
-                print_func)
-            changes.append({"ebay_change": "Adding return Sales Invoice",
-                            "ebay_user_id": ebay_user_id,
-                            "customer_name": customer_name,
-                            "customer": customer,
-                            "address": order_dict['address'],
-                            "ebay_order": ebay_order_id})
+        debug_msgprint(
+            f'Adding return Sales Invoice:'
+            + f'{ebay_user_id} : {return_doc.name}',
+            print_func)
+        changes.append({"ebay_change": "Adding return Sales Invoice",
+                        "ebay_user_id": ebay_user_id,
+                        "customer_name": customer_name,
+                        "customer": customer,
+                        "address": order_dict['address'],
+                        "ebay_order": ebay_order_id})
 
     # Commit changes to database
     frappe.db.commit()
