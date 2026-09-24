@@ -267,7 +267,15 @@ def sync_orders(num_days=None, sandbox=False, debug_print=MSGPRINT_DEBUG,
                     else:
                         listing_site_id, = listing_marketplaces
                         listing_site = EBAY_MARKETPLACE_IDS[listing_site_id]
-                    if len(purchase_marketplaces) != 1:
+                    if len(purchase_marketplaces) > 1:
+                        # Line items bought on different eBay sites
+                        purchase_site_names = sorted(
+                            EBAY_MARKETPLACE_IDS[x]
+                            for x in purchase_marketplaces
+                        )
+                        purchase_site = (
+                            f"MULTIPLE: {', '.join(purchase_site_names)}")
+                    elif not purchase_marketplaces:
                         msgprint_log.append(
                             'WARNING: unable to identify purchase eBay site '
                             + f"from \n{order['line_items']}\n")
