@@ -287,7 +287,6 @@ def end_ebay_listings(listings, print=print, item_codes=None, **kwargs):
                     errors = item['Errors']
                 else:
                     errors = [item['Errors']]
-                messages = []
                 for e in errors:
                     messages.append(
                         f'{e["SeverityCode"]} code {e["ErrorCode"]} (Item ID '
