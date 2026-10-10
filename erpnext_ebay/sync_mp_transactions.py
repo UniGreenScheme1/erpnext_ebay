@@ -64,7 +64,7 @@ def archive_transactions(start_date, end_date):
     # Check start and end date (inclusive) are reasonable
     if end_date < start_date:
         frappe.throw('Start date after end date!')
-    if end_date >= datetime.datetime.now().date():
+    if end_date >= datetime.datetime.now(datetime.timezone.utc).date():
         frappe.throw('Cannot archive dates on or after current UTC date!')
     dates = tuple(date_range(start_date, end_date))
 
