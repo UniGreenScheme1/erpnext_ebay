@@ -154,7 +154,8 @@ def archive_transactions(start_date, end_date):
 
 
 @frappe.whitelist()
-def sync_mp_transactions(num_days=None, not_today=False,
+def sync_mp_transactions(num_days: int | None = None,
+                         not_today: bool = True,
                          start_date=None, end_date=None,
                          payout_account=None):
     """Synchronise eBay Managed Payments transactions.
@@ -165,7 +166,7 @@ def sync_mp_transactions(num_days=None, not_today=False,
 
     Arguments:
         num_days: Include transactions from the last num_days days.
-        not_today: If set, transactions from today are not included.
+        not_today: If set, transactions from today (UTC) are not included.
         start_date, end_date: Include transactions in this range.
     Only one of num_days or start_date and end_date should be used.
     NOTE - this should, ideally, be run just after updating eBay listings
@@ -186,7 +187,8 @@ def sync_mp_transactions(num_days=None, not_today=False,
     company_acronym = get_company_acronym()
     ebay_bank = f'eBay Managed {default_currency} - {company_acronym}'
     expense_account = f'eBay Managed Fees - {company_acronym}'
-    today = datetime.date.today()
+    # Transaction dates are UTC, so compare against the UTC date
+    today = datetime.datetime.now(datetime.timezone.utc).date()
     if payout_account is None:
         payout_account = frappe.get_value(
             'eBay Manager Settings', 'eBay Manager Settings',
