@@ -363,6 +363,23 @@ def execute(filters=None):
             'payout': p
         })
 
+    # Drop WITHDRAWAL transactions whose payout is also listed, as the
+    # PAYOUT row is matched to the Journal Entry
+    payout_ids = {
+        t['transaction_id'] for t in data if t['transaction_type'] == 'PAYOUT'
+    }
+    data = [
+        t for t in data
+        if not (
+            t['transaction_type'] == 'WITHDRAWAL'
+            and any(
+                ref['reference_type'] == 'PAYOUT_ID'
+                and ref['reference_id'] in payout_ids
+                for ref in t['transaction'].get('references') or []
+            )
+        )
+    ]
+
     # Add linked documents
     for t in data:
         t_type = t['transaction_type']
