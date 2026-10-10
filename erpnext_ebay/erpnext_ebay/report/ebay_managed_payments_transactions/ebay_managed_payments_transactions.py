@@ -382,21 +382,22 @@ def execute(filters=None):
                 x for x in by_ebay_order_id[idx]
                 if ('Sales Invoice', x.name) not in linked_documents
             ]
-            if not sinvs:
-                # No uncancelled (unlinked) SINVs to find
-                continue
 
             if t_type == 'REFUND':
                 # Only include eBay POS refunds
                 sinvs = [
                     x for x in sinvs
                     if (
-                        x.pos_profile.startswith('eBay ')
+                        (x.pos_profile or '').startswith('eBay ')
                         or x.pos_profile == 'Split Refund (eBay/Refunds)'
                     )
                 ]
                 sale_sinvs = by_ebay_order_id[0]
-                sale_sinv = sale_sinvs[0] if sale_sinvs else None
+                sale_sinv_name = sale_sinvs[0].name if sale_sinvs else None
+
+            if not sinvs:
+                # No uncancelled (unlinked) SINVs to find
+                continue
 
             # Get payment value for each SINV
             # Go in reverse so we end up with the oldest return SINV
@@ -437,7 +438,9 @@ def execute(filters=None):
                         }
                         if t_type == 'REFUND':
                             filters['reference_name'] = [
-                                'in', [sinv.name, sale_sinv]]
+                                'in',
+                                [x for x in (sinv.name, sale_sinv_name) if x]
+                            ]
                             paid_field = 'paid_from'
                         else:
                             filters['reference_name'] = sinv.name
@@ -670,7 +673,7 @@ def execute(filters=None):
         else:
             # Only allocate to first entry
             for x in t_list[1:]:
-                x['link_amount'] == 0.0
+                x['link_amount'] = 0.0
 
     # Check if values are matched
     for t in data:
