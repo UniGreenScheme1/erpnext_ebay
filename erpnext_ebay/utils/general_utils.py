@@ -1,6 +1,8 @@
 import operator
 
 import frappe
+from frappe.utils import flt
+
 from erpnext import get_default_company
 
 
@@ -37,8 +39,8 @@ def divide_rounded(input_dict, total, dp=2):
     (whole number are exactly representable in floating point)
     """
     factor = 10**dp
-    # Multiply and round total first
-    total = round(factor * total)
+    # Round total first (with the site's rounding method), then multiply
+    total = round(factor * flt(total, dp))
     # Multiply input dict (not in place) by factor
     input_dict = {k: factor * v for k, v in input_dict.items()}
     if total == 0:

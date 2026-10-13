@@ -15,6 +15,7 @@ from .country_data import lowercase_country_dict
 from iso3166 import countries, countries_by_name
 
 import frappe
+from frappe.utils import flt
 
 from erpnext import get_default_currency
 from erpnext.controllers.sales_and_purchase_return import make_return_doc
@@ -955,7 +956,7 @@ def create_sales_invoice(order_dict, order, listing_site, purchase_site,
             ebay_exchange_rate = float(t_amount_dict['exchange_rate'])
             # Calculate fee amount as it will be calculated later (using eBay
             # exchange rate)
-            fee_amount_home_currency = round(
+            fee_amount_home_currency = flt(
                 ebay_exchange_rate * float(fee_amount), 2
             )
         else:
@@ -1008,7 +1009,7 @@ def create_sales_invoice(order_dict, order, listing_site, purchase_site,
             base_item_fee_dict = divide_rounded(
                 item_fee_dict, fee_amount_home_currency)
             base_fixed_fee_dict = {
-                k: round(v * ebay_exchange_rate, 2)
+                k: flt(v * ebay_exchange_rate, 2)
                 for k, v in fixed_fee_dict.items()
             }
 
@@ -1169,7 +1170,7 @@ def create_sales_invoice(order_dict, order, listing_site, purchase_site,
         # Calculate VAT, pushing rounding error into VAT amount
         # For multi-qty items, prices are rounded on per-qty level
         inc_vat = ebay_price
-        exc_vat = qty * round(inc_vat / (qty * (1.0 + vat_rate)), 2)
+        exc_vat = qty * flt(inc_vat / (qty * (1.0 + vat_rate)), 2)
         vat = inc_vat - exc_vat
 
         sum_vat += vat
@@ -1205,7 +1206,7 @@ def create_sales_invoice(order_dict, order, listing_site, purchase_site,
     if shipping_cost > 0.0001:
 
         inc_vat = shipping_cost
-        exc_vat = round(inc_vat / (1.0 + vat_rate), 2)
+        exc_vat = flt(inc_vat / (1.0 + vat_rate), 2)
         vat = inc_vat - exc_vat
 
         sum_vat += vat
@@ -1641,7 +1642,7 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
             # Fee credits are the difference between the refund amounts and
             # the refund payment (which we do not consider further here)
             fee_credit = refund_total - refund_payment
-            base_fee_credit = round(fee_credit * exc_rate, 2)
+            base_fee_credit = flt(fee_credit * exc_rate, 2)
 
             base_refund_total = round(base_refund_payment + base_fee_credit, 2)
 
@@ -1673,7 +1674,7 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
 
             # Calculate tax amount and adjust taxes
             if tax_rate:
-                tax_amount = round(refund_total - (refund_total / tax_rate), 2)
+                tax_amount = flt(refund_total - (refund_total / tax_rate), 2)
                 ex_tax_refund = round(refund_total - tax_amount, 2)
                 ret_tax = return_doc.taxes[0]
                 ret_tax.charge_type = 'Actual'
@@ -1704,8 +1705,8 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
             for i, item in enumerate(return_items):
                 # Ensures the refund is not more than the original price
                 item.rate = min(
-                    round(item.amount / item.qty, 2),
-                    round(-refund_skus[item.item_code] / item.qty, 2)
+                    flt(item.amount / item.qty, 2),
+                    flt(-refund_skus[item.item_code] / item.qty, 2)
                 )
                 item.amount = item.rate * item.qty
             refund_remainder = (
@@ -1721,7 +1722,7 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                 if refund_remainder > 0:
                     # Must add more refund to item
                     possible_refund = (
-                        round(original_rates[i] - item.rate, 2) * -item.qty
+                        flt(original_rates[i] - item.rate, 2) * -item.qty
                     )
                     amount_change = min(refund_remainder, possible_refund)
                 else:
@@ -1731,7 +1732,7 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                 # Ensures the refund is not more than the original price
                 item.rate = min(
                     original_rates[i],
-                    round((item.amount - amount_change) / item.qty, 2)
+                    flt((item.amount - amount_change) / item.qty, 2)
                 )
                 item.amount = item.rate * item.qty
 
