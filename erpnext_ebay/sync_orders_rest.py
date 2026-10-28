@@ -1468,39 +1468,41 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                        print_func)
 
     # Construct refund IDs for linking payment_summary refunds with line
-    # item refunds, if required
+    # item refunds, if required.
+    # Line item refunds are matched on refund_reference_id if present, or
+    # else on refund_date (the amounts cannot be compared, as payment refunds
+    # are in the seller currency and net of fee credits). Matching is
+    # one-to-one: a refund_date shared by more than one payment refund or
+    # line item refund is not used.
+    all_li_refunds = [
+        li_r for li in order['line_items'] for li_r in (li['refunds'] or [])
+    ]
+    payment_date_counts = collections.Counter(
+        x['refund_date'] for x in refunds
+    )
     unmatched_payment_refunds = []
-    unmatched_li_refunds = []
     for refund in refunds:
         if refund['refund_id']:
             continue
         # No refund ID for this entry; construct one
         refund['refund_id'] = f'RANDOM-{frappe.utils.random_string(16)}'
-        # Find matching line item
-        break_from_refund = False
-        for li in order['line_items']:
-            if break_from_refund:
-                break
-            for li_r in li.get('refunds', []):
-                if li_r['refund_id']:
-                    continue
-                if li_r['refund_reference_id'] == refund['refund_reference_id']:
-                    li_r['refund_id'] = refund['refund_id']
-                    break_from_refund = True
-                    break
-                match = (
-                    li_r['amount'] == refund['amount']
-                    and li_r['refund_date'] == refund['refund_date']
-                )
-                if match:
-                    # Close enough (might not be exactly correct, but
-                    # sufficient for our purposes)
-                    li_r['refund_id'] = refund['refund_id']
-                    break_from_refund = True
-                    break
-                unmatched_li_refunds.append(li_r)
-        if not break_from_refund:
+        # Find matching line item refund
+        candidates = [x for x in all_li_refunds if not x['refund_id']]
+        matches = [
+            x for x in candidates
+            if refund['refund_reference_id']
+            and x['refund_reference_id'] == refund['refund_reference_id']
+        ]
+        if not matches and payment_date_counts[refund['refund_date']] == 1:
+            matches = [
+                x for x in candidates
+                if x['refund_date'] == refund['refund_date']
+            ]
+        if len(matches) == 1:
+            matches[0]['refund_id'] = refund['refund_id']
+        else:
             unmatched_payment_refunds.append(refund)
+    unmatched_li_refunds = [x for x in all_li_refunds if not x['refund_id']]
 
     # Check for unmatched refund IDs; match if one each
     if len(unmatched_payment_refunds) == 1 and len(unmatched_li_refunds) == 1:
@@ -1621,7 +1623,12 @@ def create_return_sales_invoice(order_dict, order, trans_by_order, changes,
                         li_ship = float(
                             li['delivery_cost']['shipping_cost']['value']
                         )
-                        li_total = float(li['total']['value'])
+                        # Line item refunds exclude Collect and Remit taxes
+                        li_car = sum(
+                            float(x['amount']['value'])
+                            for x in li['ebay_collect_and_remit_taxes'] or []
+                        )
+                        li_total = float(li['total']['value']) - li_car
                         li_ship_refund = refund_value * li_ship / li_total
                         refund_skus[SHIPPING_ITEM] += li_ship_refund
                     else:
