@@ -486,11 +486,33 @@ def extract_customer(order, sandbox):
     # so we use the Order ID prefixed by 'ORDER_'
 
     # Prepare the address dictionary
+    ebay_address_id = f'ORDER_{order_id}'
     if postcode is not None and db_country == 'United Kingdom':
-        postcode = sanitize_postcode(postcode)
+        try:
+            postcode = sanitize_postcode(postcode)
+        except ValueError:
+            # Report the address as supplied by eBay
+            address_details = '\n<br>'.join(
+                html.escape(f'{label}: {value}') for label, value in (
+                    ('eBay address ID', ebay_address_id),
+                    ('Name', ship_to.get('full_name')),
+                    ('Address line 1', shipping_address.get('address_line1')),
+                    ('Address line 2', shipping_address.get('address_line2')),
+                    ('City', shipping_address.get('city')),
+                    ('County', shipping_address.get('county')),
+                    ('State or province',
+                     shipping_address.get('state_or_province')),
+                    ('Postcode', shipping_address.get('postal_code')),
+                    ('Country code', shipping_address.get('country_code'))
+                )
+            )
+            raise ErpnextEbaySyncError(
+                f'Order {order_id} has an unrecognised UK postcode. '
+                + f'eBay address details:\n<br>{address_details}'
+            )
     address_dict = {
         "doctype": "Address",
-        "ebay_address_id": f"ORDER_{order_id}",
+        "ebay_address_id": ebay_address_id,
         "address_title": shipping_name or ebay_user_id,
         "address_type": "Shipping",
         "address_line1": address_line1 or '-',
